@@ -46,3 +46,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+// 👇 新增：处理 GET 请求 (查)
+export async function GET() {
+    try {
+        // 核心动作：去 'tasks' 表里查数据
+        // .select('*') 意思是：我要所有列 (id, prompt, status...)
+        // .order(...) 意思是：按创建时间倒序排 (最新的在最上面)
+        const { data, error } = await supabase
+            .from('tasks')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            throw error;
+        }
+
+        // 把查到的列表 (数组) 返回给前端
+        return NextResponse.json({
+            success: true,
+            tasks: data
+        });
+
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}

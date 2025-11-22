@@ -1,77 +1,108 @@
-'use client'; // 👈 开启交互模式
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  // 1. 定义状态 (State)
-  const [prompt, setPrompt] = useState(""); // 存用户输入的需求
-  const [taskId, setTaskId] = useState<number | null>(null); // 存生成的任务ID
-  const [loading, setLoading] = useState(false); // 存加载状态
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  // 新增：存历史列表
+  const [taskList, setTaskList] = useState<any[]>([]);
 
-  // 2. 提交任务的动作
+  // 1. 定义拉取列表的动作
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch('/api/agent'); // GET
+      const data = await res.json();
+      if (data.success) {
+        setTaskList(data.tasks);
+      }
+    } catch (e) {
+      console.error("获取列表失败");
+    }
+  };
+
+  // 2. 自动触发：页面一加载，就拉一次列表
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
   const startTask = async () => {
     if (!prompt) return;
-    setLoading(true); // 按钮变灰，防止重复点
+    setLoading(true);
 
     try {
-      // 呼叫我们刚才写的后端接口
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt }), // 把输入的内容发过去
+        body: JSON.stringify({ prompt: prompt }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setTaskId(data.taskId); // 拿到 ID，界面会自动显示结果框
+        setPrompt(""); // 清空输入框
         alert(`🎉 任务创建成功！ID: ${data.taskId}`);
+        fetchTasks(); // 👈 关键：成功后刷新列表
       } else {
         alert("创建失败: " + data.error);
       }
     } catch (e) {
-      alert("网络错误，提交失败");
+      alert("网络错误");
     } finally {
-      setLoading(false); // 无论成功失败，按钮恢复
+      setLoading(false);
     }
   };
 
-  // 3. 界面渲染 (HTML + Tailwind)
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gray-50">
+    <main className="flex min-h-screen flex-col items-center py-12 px-4 bg-gray-50">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8">
         <h1 className="text-3xl font-bold mb-2 text-gray-800">AI Coding Agent 🤖</h1>
-        <p className="text-gray-500 mb-6">输入你的需求，我们将创建一个 Supabase 任务单。</p>
 
-        {/* 输入框 */}
         <textarea
-          className="w-full h-32 p-4 border rounded-lg mb-4 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-          placeholder="例如：帮我写一个贪吃蛇游戏..."
+          className="w-full h-24 p-4 border rounded-lg mb-4 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+          placeholder="输入需求..."
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           disabled={loading}
         />
 
-        {/* 提交按钮 */}
         <button
           onClick={startTask}
           disabled={loading || !prompt}
           className={`w-full py-3 rounded-lg font-bold text-white transition-all
             ${loading || !prompt
               ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 shadow-md'}`}
+              : 'bg-blue-600 hover:bg-blue-700'}`}
         >
-          {loading ? '正在创建任务...' : '🚀 开始生成'}
+          {loading ? '创建中...' : '🚀 新建任务'}
         </button>
+      </div>
 
-        {/* 成功后的反馈框 */}
-        {taskId && (
-          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
-            <p className="font-bold text-lg">✅ 任务单已生成</p>
-            <p>任务 ID: <span className="font-mono text-xl font-bold">{taskId}</span></p>
-            <p className="text-sm mt-2 text-green-600">快去 Supabase 的 tasks 表里看看吧！</p>
-          </div>
-        )}
+      {/* 历史列表区 */}
+      <div className="w-full max-w-2xl mt-8">
+        <h2 className="text-xl font-bold mb-4 text-gray-700 ml-2">📜 历史任务</h2>
+        <div className="space-y-3">
+          {taskList.map((task) => (
+            <div key={task.id} className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-between items-center hover:shadow-md transition-shadow">
+              <div>
+                <p className="font-bold text-gray-800 text-lg">#{task.id} {task.prompt}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {new Date(task.created_at).toLocaleString()}
+                </p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border
+                ${task.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                  task.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-700 border-gray-200'}
+              `}>
+                {task.status}
+              </span>
+            </div>
+          ))}
+
+          {taskList.length === 0 && (
+            <p className="text-center text-gray-400 py-8">还没有任务，快去建一个吧！</p>
+          )}
+        </div>
       </div>
     </main>
   );
