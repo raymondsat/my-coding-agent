@@ -1,90 +1,78 @@
-'use client';
+'use client'; // 👈 开启交互模式
 
 import { useState } from 'react';
 
-interface UserData {
-  name: string;
-  role: string;
-  level: number;
-}
-
 export default function Home() {
-  const [user, setUser] = useState<UserData | null>(null);
+  // 1. 定义状态 (State)
+  const [prompt, setPrompt] = useState(""); // 存用户输入的需求
+  const [taskId, setTaskId] = useState<number | null>(null); // 存生成的任务ID
+  const [loading, setLoading] = useState(false); // 存加载状态
 
-  // 1. 新增一个状态，专门用来存输入框里的文字
-  const [inputName, setInputName] = useState("");
+  // 2. 提交任务的动作
+  const startTask = async () => {
+    if (!prompt) return;
+    setLoading(true); // 按钮变灰，防止重复点
 
-  const fetchUser = async () => {
-    // 2. 修改请求地址：把输入框里的 inputName 拼接到 URL 后面
-    // 比如变成 /api/user?name=Jack
-    const res = await fetch(`/api/user?name=${inputName}`);
-    const data = await res.json();
-    setUser(data);
+    try {
+      // 呼叫我们刚才写的后端接口
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt }), // 把输入的内容发过去
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTaskId(data.taskId); // 拿到 ID，界面会自动显示结果框
+        alert(`🎉 任务创建成功！ID: ${data.taskId}`);
+      } else {
+        alert("创建失败: " + data.error);
+      }
+    } catch (e) {
+      alert("网络错误，提交失败");
+    } finally {
+      setLoading(false); // 无论成功失败，按钮恢复
+    }
   };
 
-  // 新增一个状态，用来存“备注”
-  const [inputNote, setInputNote] = useState("");
-
-  // 修改后的提交函数
-  const submitData = async () => {
-
-    // 1. 准备要发送的包裹 (JSON 对象)
-    const payload = {
-      name: inputName,
-      note: inputNote
-    };
-
-    // 2. 发送 POST 请求
-    const res = await fetch('/api/user', {
-      method: 'POST', // <--- 关键：动作变成了 POST
-      headers: {
-        'Content-Type': 'application/json' // 告诉后端我是 JSON
-      },
-      body: JSON.stringify(payload) // <--- 关键：数据放在 body 里
-    });
-
-    const data = await res.json();
-    setUser(data); // 这里的 user 类型可能需要根据返回结果微调，或者简单点先复用
-  };
-
+  // 3. 界面渲染 (HTML + Tailwind)
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-3xl font-bold mb-8">POST 提交测试</h1>
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gray-50">
+      <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8">
+        <h1 className="text-3xl font-bold mb-2 text-gray-800">AI Coding Agent 🤖</h1>
+        <p className="text-gray-500 mb-6">输入你的需求，我们将创建一个 Supabase 任务单。</p>
 
-      <div className="flex flex-col gap-4 mb-4 w-full max-w-md">
-        <input
-          type="text"
-          placeholder="请输入名字..."
-          className="border p-2 rounded text-black"
-          value={inputName}
-          onChange={(e) => setInputName(e.target.value)}
+        {/* 输入框 */}
+        <textarea
+          className="w-full h-32 p-4 border rounded-lg mb-4 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+          placeholder="例如：帮我写一个贪吃蛇游戏..."
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          disabled={loading}
         />
 
-        <input
-          type="text"
-          placeholder="写点备注 (比如: 我是 PM)..."
-          className="border p-2 rounded text-black"
-          value={inputNote}
-          onChange={(e) => setInputNote(e.target.value)}
-        />
-
+        {/* 提交按钮 */}
         <button
-          onClick={submitData}
-          className="bg-purple-600 hover:bg-purple-800 text-white font-bold py-2 px-4 rounded"
+          onClick={startTask}
+          disabled={loading || !prompt}
+          className={`w-full py-3 rounded-lg font-bold text-white transition-all
+            ${loading || !prompt
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 shadow-md'}`}
         >
-          提交数据 (POST)
+          {loading ? '正在创建任务...' : '🚀 开始生成'}
         </button>
-      </div>
 
-      {user && (
-        <div className="mt-8 p-6 border-2 border-purple-500 rounded-lg bg-purple-50 w-full max-w-md">
-          <h2 className="text-xl font-semibold text-purple-700">后端返回：</h2>
-          {/* 这里如果不匹配之前的类型定义可能会报错，我们先暂时用 JSON.stringify 看看原始数据 */}
-          <pre className="mt-4 text-sm text-gray-800 whitespace-pre-wrap">
-            {JSON.stringify(user, null, 2)}
-          </pre>
-        </div>
-      )}
+        {/* 成功后的反馈框 */}
+        {taskId && (
+          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+            <p className="font-bold text-lg">✅ 任务单已生成</p>
+            <p>任务 ID: <span className="font-mono text-xl font-bold">{taskId}</span></p>
+            <p className="text-sm mt-2 text-green-600">快去 Supabase 的 tasks 表里看看吧！</p>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
