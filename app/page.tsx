@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// ✅ 改动 1：不要再用旧的 supabaseClient，改用新的 browser client 工厂
 import { createClient } from '@/lib/supabase/client';
 
 // 在模块顶层创建浏览器端 Supabase 实例（官方推荐）
@@ -12,6 +11,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [taskList, setTaskList] = useState<any[]>([]);
 
+  // ✅ 当前登录用户信息
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  // ✅ 用于登录输入的邮箱
   const [email, setEmail] = useState('');
 
   // 1. 拉取列表（当前登录用户的 tasks，会被 RLS 自动过滤）
@@ -36,10 +38,26 @@ export default function Home() {
     }
   };
 
-  // 2. 自动轮询
+  // 2. 首屏：加载当前用户 + 拉取任务；并自动轮询任务
   useEffect(() => {
-    fetchTasks(); // 进页面先查一次
+    // 2.1 加载当前登录用户
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.warn('获取当前用户失败:', error.message);
+        return;
+      }
+      if (data?.user) {
+        setCurrentUser(data.user);
+        // 如果你想同步把输入框也填上：
+        // setEmail(data.user.email ?? '');
+      }
+    };
 
+    loadUser();
+    fetchTasks();
+
+    // 2.2 每 5 秒刷新一次任务列表
     const interval = setInterval(() => {
       fetchTasks();
     }, 5000);
@@ -87,7 +105,7 @@ export default function Home() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin, // 登录后重定向回当前页面
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -99,35 +117,67 @@ export default function Home() {
     }
   };
 
+  // 5. 退出登录
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setTaskList([]);
+    setPrompt('');
+    // 这里不清空 email，方便重新登录同一个邮箱；如果想清空可以加：
+    // setEmail('');
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center py-12 px-4 bg-gray-50">
+      {/* ✅ 顶部显示当前登录用户 */}
+      <div className="w-full max-w-2xl mb-4 px-2 text-gray-700">
+        {currentUser ? (
+          <div className="flex items-center justify-between">
+            <p>
+              已登录：
+              <span className="font-semibold">{currentUser.email}</span>
+            </p>
+            <button
+              onClick={handleSignOut}
+              className="text-sm text-red-500 hover:underline"
+            >
+              退出登录
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">当前未登录</p>
+        )}
+      </div>
+
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8">
         <h1 className="text-3xl font-bold mb-4 text-gray-800">AI Coding Agent 🤖</h1>
 
-        {/* ✅ 改动 2：登录区域，触发 Supabase Auth */}
-        <div className="mb-6 flex gap-2">
-          <input
-            type="email"
-            className="flex-1 p-2 border rounded-lg text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="请输入邮箱，使用 Magic Link 登录"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={handleSignIn}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
-          >
-            发送登录链接
-          </button>
-        </div>
+        {/* 登录区域，触发 Supabase Auth */}
+        {!currentUser && (
+          <div className="mb-6 flex gap-2">
+            <input
+              type="email"
+              className="flex-1 p-2 border rounded-lg text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="请输入邮箱，使用 Magic Link 登录"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={handleSignIn}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              发送登录链接
+            </button>
+          </div>
+        )}
 
         <textarea
           className="w-full h-24 p-4 border rounded-lg mb-4 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-          placeholder="输入需求..."
+          placeholder={currentUser ? '输入需求...' : '请先登录后再创建任务'}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          disabled={loading}
+          disabled={loading || !currentUser}
         />
 
         <button
