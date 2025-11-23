@@ -1,14 +1,25 @@
+// api/agent/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+// 1. 新增：App Router 下获取请求 Cookie 的工具
+import { cookies } from 'next/headers';
+// 2. 新增：创建用户限定 Supabase 客户端的工具
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+
+// ⚠️ 注意：请移除或注释掉原来的 import { supabase } from '@/lib/supabaseClient';
+
 
 export async function POST(request: NextRequest) {
+    // RLS 前提 1：创建用户限定客户端
+    const supabase = createRouteHandlerClient({ cookies });
+
     try {
         const body = await request.json();
         const prompt = body.prompt;
 
         if (!prompt) return NextResponse.json({ error: "需求不能为空" }, { status: 400 });
 
-        // 1. 存入 Supabase (保持不变)
+
         const { data, error } = await supabase
             .from('tasks')
             .insert([{ prompt, status: 'pending' }])
@@ -17,9 +28,7 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error;
 
-        // ============================================================
-        // 👇 2. 新增：按门铃 (触发 n8n)
-        // ============================================================
+
         const n8nUrl = process.env.N8N_WEBHOOK_URL;
 
         if (n8nUrl) {
@@ -31,7 +40,7 @@ export async function POST(request: NextRequest) {
                 body: JSON.stringify({ id: data.id })
             }).catch(err => console.error("⚠️ 无法触发 n8n:", err));
         }
-        // ============================================================
+
 
         return NextResponse.json({
             success: true,
@@ -46,10 +55,11 @@ export async function POST(request: NextRequest) {
 
 // 👇 新增：处理 GET 请求 (查)
 export async function GET() {
+
+    const supabase = createRouteHandlerClient({ cookies });
+
     try {
-        // 核心动作：去 'tasks' 表里查数据
-        // .select('*') 意思是：我要所有列 (id, prompt, status...)
-        // .order(...) 意思是：按创建时间倒序排 (最新的在最上面)
+
         const { data, error } = await supabase
             .from('tasks')
             .select('*')
