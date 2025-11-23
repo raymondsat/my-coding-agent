@@ -21,8 +21,17 @@ export default function Home() {
   };
 
   // 2. 自动触发
+  // 修改 useEffect
   useEffect(() => {
-    fetchTasks();
+    fetchTasks(); // 进门先查一次
+
+    // 设置定时器：每 5 秒自动查一次
+    const interval = setInterval(() => {
+      fetchTasks();
+    }, 5000);
+
+    // 🧹 清理工作：当用户离开页面时，关掉定时器 (防止内存泄漏)
+    return () => clearInterval(interval);
   }, []);
 
   const startTask = async () => {
