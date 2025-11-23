@@ -30,9 +30,7 @@ export async function POST(request: NextRequest) {
 
 
         const n8nUrl = process.env.N8N_WEBHOOK_URL;
-
         if (n8nUrl) {
-            // Fire-and-Forget (发完即走，不等待 n8n 返回结果)
             fetch(n8nUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -47,7 +45,6 @@ export async function POST(request: NextRequest) {
             taskId: data.id,
             message: "任务已创建，AI 正在赶来..."
         });
-
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
